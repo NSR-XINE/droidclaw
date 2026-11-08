@@ -9,7 +9,7 @@ DIM='\033[2m'
 BLD='\033[1m'
 TEL='\033[0;36m'
 
-clear
+clear 2>/dev/null || true
 
 echo ""
 echo -e "${TEL}  ╭─────────────────────────────────╮${RST}"
