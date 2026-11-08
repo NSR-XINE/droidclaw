@@ -38,6 +38,9 @@ function save(data) {
   // Validate required fields
   if (typeof data !== 'object' || !data) return;
   const valid = { ...DEFAULTS, ...data };
+  if (typeof valid.apiKey === 'string') valid.apiKey = valid.apiKey.trim();
+  if (typeof valid.baseUrl === 'string') valid.baseUrl = valid.baseUrl.trim().replace(/\/+$/, '');
+  if (typeof valid.telegramToken === 'string') valid.telegramToken = valid.telegramToken.trim();
   _cache = valid;
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(valid, null, 2));
 }

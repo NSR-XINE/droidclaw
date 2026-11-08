@@ -1,11 +1,29 @@
-#!/usr/bin/env node
+#!/data/data/com.termux/files/usr/bin/env node
 'use strict';
 const { spawn, spawnSync } = require('child_process');
 const fs   = require('fs');
 const path = require('path');
 const os   = require('os');
 
-const DROIDCLAW = path.join(os.homedir(), 'droidclaw');
+function resolveRepo() {
+  if (process.env.DROIDCLAW_DIR && fs.existsSync(process.env.DROIDCLAW_DIR)) {
+    return process.env.DROIDCLAW_DIR;
+  }
+  const parent = path.resolve(__dirname, '..');
+  if (fs.existsSync(path.join(parent, 'src', 'index.js'))) {
+    return parent;
+  }
+  const candidates = [
+    path.join(os.homedir(), 'droidclaw-nsr'),
+    path.join(os.homedir(), 'droidclaw')
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(path.join(c, 'src', 'index.js'))) return c;
+  }
+  return path.join(os.homedir(), 'droidclaw');
+}
+
+const DROIDCLAW = resolveRepo();
 const DOT_DIR   = path.join(os.homedir(), '.droidclaw');
 const PID_FILE  = path.join(DOT_DIR, 'daemon.pid');
 const LOCK_FILE = path.join(DOT_DIR, 'daemon.lock');

@@ -98,7 +98,12 @@ class CommandPalette {
     screen.key(['down', 'j'],  this._handleDown = () => { this.selected = Math.min(this._filtered().length - 1, this.selected + 1); this._render(); screen.render(); });
     screen.key(['enter'],      this._handleEnter = () => {
       const cmds = this._filtered();
-      if (cmds[this.selected]) { const sel = cmds[this.selected].label; this.close(); if (this._onSelect) this._onSelect(sel); }
+      if (cmds[this.selected]) {
+        const sel = cmds[this.selected].label;
+        const cb = this._onSelect;
+        this.close();
+        if (cb) cb(sel);
+      }
     });
 
     screen.on('keypress', this._handleKey = (ch, key) => {

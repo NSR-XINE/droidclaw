@@ -113,7 +113,7 @@ class StatusPanel {
 
     const model    = cfg.model ? cfg.model.split('/').pop().slice(0, 14) : '?';
     const telegram = cfg.telegramToken ? fg(C.ok, 'on') : fg(C.off, 'off');
-    const uptime   = hb && hb.uptime ? hb.uptime() : '0m';
+    const uptime   = hb && hb.uptime ? (typeof hb.uptime === 'function' ? hb.uptime() : hb.uptime) : '0m';
 
     return {
       daemon, mood,

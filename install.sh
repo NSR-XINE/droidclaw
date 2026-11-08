@@ -39,12 +39,17 @@ pkg install -y -q nodejs git curl 2>/dev/null || {
 echo -e "      ${GRN}✓${RST} nodejs $(node --version)"
 
 echo -e "${GRN}[3/5]${RST} Getting Kira..."
-DROIDCLAW="$HOME/droidclaw"
-if [ -d "$DROIDCLAW/.git" ]; then
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+if [ -d "$SCRIPT_DIR/src" ]; then
+  DROIDCLAW="$SCRIPT_DIR"
+  echo -e "      using current repository at $DROIDCLAW"
+elif [ -d "$HOME/droidclaw/.git" ]; then
+  DROIDCLAW="$HOME/droidclaw"
   echo -e "      existing install — updating..."
   cd "$DROIDCLAW"
   git pull -q origin main 2>/dev/null || echo -e "      ${YLW}⚠ using existing version${RST}"
 else
+  DROIDCLAW="$HOME/droidclaw"
   [ -d "$DROIDCLAW" ] && mv "$DROIDCLAW" "${DROIDCLAW}_backup_$(date +%s)"
   git clone -q https://github.com/levilyf/droidclaw.git "$DROIDCLAW" || {
     echo -e "${RED}  ✕ Clone failed. Check your connection.${RST}"
@@ -58,7 +63,7 @@ cd "$DROIDCLAW"
 echo -e "${GRN}[4/5]${RST} Installing node modules..."
 npm install -q --no-audit --no-fund 2>/dev/null || {
   echo -e "${RED}  ✕ npm install failed.${RST}"
-  echo -e "${DIM}  Try: cd ~/droidclaw && npm install${RST}"
+  echo -e "${DIM}  Try: cd $DROIDCLAW && npm install${RST}"
   exit 1
 }
 echo -e "      ${GRN}✓${RST}"
@@ -69,6 +74,17 @@ mkdir -p "$HOME/.droidclaw"
 
 cp "$DROIDCLAW/bin/kira" "$HOME/.local/bin/kira"
 chmod +x "$HOME/.local/bin/kira"
+if command -v termux-fix-shebang >/dev/null 2>&1; then
+  termux-fix-shebang "$HOME/.local/bin/kira" 2>/dev/null || true
+fi
+
+if [ -n "$PREFIX" ] && [ -d "$PREFIX/bin" ] && [ -w "$PREFIX/bin" ]; then
+  cp "$DROIDCLAW/bin/kira" "$PREFIX/bin/kira"
+  chmod +x "$PREFIX/bin/kira"
+  if command -v termux-fix-shebang >/dev/null 2>&1; then
+    termux-fix-shebang "$PREFIX/bin/kira" 2>/dev/null || true
+  fi
+fi
 
 for RC in "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.zshrc" "$HOME/.profile"; do
   if [ -f "$RC" ] && ! grep -q '\.local/bin' "$RC" 2>/dev/null; then

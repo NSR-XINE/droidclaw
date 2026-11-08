@@ -24,7 +24,7 @@ async function maybeReflect() {
       `You are Kira. Reflect on recent conversations.\n\n${history}\n\nWrite a short honest journal entry. No report format.`
     );
     if (r && r.length > 50) {
-      const clean = r.replace(/thinking[\s\S]*?<\/think>/gi, '').replace(/<\/?think>/gi, '').trim();
+      const clean = _cleanOutput(r);
       workspace.write('HEARTBEAT', current + `\n\n--- ${new Date().toLocaleDateString()} ---\n${clean}`);
     }
   } catch {}
@@ -170,7 +170,12 @@ class AgentLoop {
 }
 
 function _cleanOutput(text) {
-  return text.replace(/thinking[\s\S]*?<\/think>/gi, '').replace(/<\/?think>/gi, '').trim();
+  if (!text) return '';
+  return text
+    .replace(/<(?:think|thinking)>[\s\S]*?<\/(?:think|thinking)>/gi, '')
+    .replace(/<(?:think|thinking)>[\s\S]*$/gi, '')
+    .replace(/<\/?(?:think|thinking)>/gi, '')
+    .trim();
 }
 
 function _withTimeout(promise, ms) {

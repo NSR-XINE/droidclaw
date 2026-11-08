@@ -92,7 +92,11 @@ Respond in JSON only:
   ]
 }`);
 
-    const clean = result.replace(/thinking[\s\S]*?<\/think>/gi, '').replace(/<\/?think>/gi, '').trim();
+    const clean = result
+      .replace(/<(?:think|thinking)>[\s\S]*?<\/(?:think|thinking)>/gi, '')
+      .replace(/<(?:think|thinking)>[\s\S]*$/gi, '')
+      .replace(/<\/?(?:think|thinking)>/gi, '')
+      .trim();
     const match = clean.match(/\{[\s\S]*\}/);
     if (!match) return _defaultSteps(goal);
 
@@ -200,7 +204,11 @@ ${executionResult.output.slice(0, 1000)}
 
 Write a concise summary to send via Telegram. No markdown. Plain text.`);
 
-    return result.replace(/thinking[\s\S]*?<\/think>/gi, '').replace(/<\/?think>/gi, '').trim();
+    return result
+      .replace(/<(?:think|thinking)>[\s\S]*?<\/(?:think|thinking)>/gi, '')
+      .replace(/<(?:think|thinking)>[\s\S]*$/gi, '')
+      .replace(/<\/?(?:think|thinking)>/gi, '')
+      .trim();
   } catch { return executionResult.output.slice(0, 300); }
 }
 

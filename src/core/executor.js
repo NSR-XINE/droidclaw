@@ -86,19 +86,51 @@ function _withTimeout(promise, ms) {
 // ── Parse tool calls from model output ────────────────────────────────────────
 function parseTools(text) {
   const tools = [];
-  const re    = /<tool:(\w+)>([\s\S]*?)<\/tool>/g;
+  if (!text) return tools;
+
+  const re = /<tool:(\w+)>([\s\S]*?)(?:<\/tool>|<\/tool:\1>)/g;
   let m;
   while ((m = re.exec(text)) !== null) {
-    try   { tools.push({ name: m[1], args: JSON.parse(m[2] || '{}') }); }
-    catch { tools.push({ name: m[1], args: { raw: m[2] } }); }
+    const name = m[1];
+    let raw = (m[2] || '').trim();
+    // Strip markdown code block fences if present
+    raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+
+    let args = {};
+    if (!raw) {
+      args = {};
+    } else {
+      try {
+        args = JSON.parse(raw);
+      } catch {
+        try {
+          const sanitized = raw
+            .replace(/,\s*([}\]])/g, '$1')
+            .replace(/'/g, '"');
+          args = JSON.parse(sanitized);
+        } catch {
+          if (name === 'exec') args = { command: raw };
+          else if (name === 'search') args = { query: raw };
+          else if (name === 'open_app') args = { package: raw };
+          else if (name === 'web_fetch') args = { url: raw };
+          else if (name === 'tap_text' || name === 'find_and_tap') args = { text: raw };
+          else args = { raw };
+        }
+      }
+    }
+    tools.push({ name, args });
   }
   return tools;
 }
 
 function cleanReply(text) {
+  if (!text) return '';
   return text
-    .replace(/<tool:[\s\S]*?<\/tool>/g, '')
-    .replace(/thinking[\s\S]*?<\/think>/gi, '').replace(/<\/?think>/gi, '')
+    .replace(/<tool:[\s\S]*?(?:<\/tool>|<\/tool:\w+>)/g, '')
+    .replace(/<(?:think|thinking)>[\s\S]*?<\/(?:think|thinking)>/gi, '')
+    .replace(/<(?:think|thinking)>[\s\S]*$/gi, '')
+    .replace(/<\/?(?:think|thinking)>/gi, '')
+    .replace(/`{1,3}<tool:[\s\S]*?`{1,3}/g, '')
     .trim();
 }
 

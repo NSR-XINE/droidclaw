@@ -22,6 +22,7 @@ process.chdir(path.join(__dirname, '..'));
 const mind     = require('./core/mind');
 const config   = require('./config');
 const ground   = require('./core/ground');
+const engine   = require('./core/engine');
 
 const DAEMON_FILE   = path.join(os.homedir(), '.droidclaw', 'daemon_state.json');
 const LOG_FILE      = path.join(os.homedir(), '.droidclaw', 'daemon.log');
@@ -60,7 +61,7 @@ async function sendTelegram(message) {
   if (!cfg.telegramToken || !cfg.telegramChatId) return false;
 
   try {
-    const res = await fetch(
+    let res = await fetch(
       `https://api.telegram.org/bot${cfg.telegramToken}/sendMessage`,
       {
         method:  'POST',
@@ -72,6 +73,19 @@ async function sendTelegram(message) {
         }),
       }
     );
+    if (!res.ok) {
+      res = await fetch(
+        `https://api.telegram.org/bot${cfg.telegramToken}/sendMessage`,
+        {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            chat_id: cfg.telegramChatId,
+            text:    message,
+          }),
+        }
+      );
+    }
     return res.ok;
   } catch { return false; }
 }
@@ -216,24 +230,14 @@ Respond in JSON only:
 Be honest. Vague inner monologue is useless. If nothing is worth saying, say nothing.`;
 
   try {
-    const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
-      method:  'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${cfg.apiKey}`,
-      },
-      body: JSON.stringify({
-        model:      cfg.model,
-        max_tokens: 1000,
-        messages:   [{ role: 'user', content: prompt }],
-      }),
-    });
+    const raw = await engine.rawChat(prompt);
+    if (!raw) return null;
 
-    if (!res.ok) return null;
-
-    const data    = await res.json();
-    const raw     = data.choices?.[0]?.message?.content || '';
-    const cleaned = raw.replace(/thinking[\s\S]*?<\/think>/gi, '').replace(/<\/?think>/gi, '').trim();
+    const cleaned = raw
+      .replace(/<(?:think|thinking)>[\s\S]*?<\/(?:think|thinking)>/gi, '')
+      .replace(/<(?:think|thinking)>[\s\S]*$/gi, '')
+      .replace(/<\/?(?:think|thinking)>/gi, '')
+      .trim();
     const match   = cleaned.match(/\{[\s\S]*\}/);
     if (!match) return null;
 

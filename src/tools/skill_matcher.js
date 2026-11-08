@@ -226,7 +226,11 @@ Rules:
 - Return { "should_create": false, "skills": [] } if nothing worth creating
 `);
 
-    const clean  = result.replace(/thinking[\s\S]*?<\/think>/gi, '').replace(/<\/?think>/gi, '').trim();
+    const clean = result
+      .replace(/<(?:think|thinking)>[\s\S]*?<\/(?:think|thinking)>/gi, '')
+      .replace(/<(?:think|thinking)>[\s\S]*$/gi, '')
+      .replace(/<\/?(?:think|thinking)>/gi, '')
+      .trim();
     const match  = clean.match(/\{[\s\S]*\}/);
     if (!match) return;
 

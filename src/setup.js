@@ -43,26 +43,55 @@ function ask(prompt, defaultVal = '') {
 function askSecret(prompt) {
   return new Promise(resolve => {
     process.stdout.write(prompt + ' ');
-    process.stdin.setRawMode?.(true);
+    if (process.stdin.isTTY) process.stdin.setRawMode?.(true);
     process.stdin.resume();
     process.stdin.setEncoding('utf8');
     let input = '';
-    process.stdin.on('data', function handler(ch) {
-      if (ch === '\r' || ch === '\n') {
-        process.stdin.setRawMode?.(false);
-        process.stdin.pause();
-        process.stdin.removeListener('data', handler);
-        process.stdout.write('\n');
-        resolve(input);
-      } else if (ch === '\u0003') {
-        process.exit(0);
-      } else if (ch === '\u007f') {
-        if (input.length > 0) { input = input.slice(0, -1); process.stdout.write('\u0008 \u0008'); }
-      } else {
-        input += ch;
-        process.stdout.write('*');
+
+    function finish() {
+      if (process.stdin.isTTY) process.stdin.setRawMode?.(false);
+      process.stdin.pause();
+      process.stdin.removeListener('data', handler);
+      process.stdout.write('\n');
+      resolve(input.trim());
+    }
+
+    function handler(ch) {
+      // Strip bracketed paste mode sequences
+      const cleanCh = ch.replace(/\x1b\[20[01]~/g, '');
+
+      // Check for Enter key or newline within chunk
+      if (cleanCh.includes('\r') || cleanCh.includes('\n')) {
+        const parts = cleanCh.split(/[\r\n]/);
+        input += parts[0];
+        finish();
+        return;
       }
-    });
+
+      // Ctrl+C
+      if (cleanCh.includes('\u0003')) {
+        if (process.stdin.isTTY) process.stdin.setRawMode?.(false);
+        process.exit(0);
+      }
+
+      // Backspace (DEL \u007f or BS \u0008)
+      if (cleanCh === '\u007f' || cleanCh === '\u0008') {
+        if (input.length > 0) {
+          input = input.slice(0, -1);
+          process.stdout.write('\u0008 \u0008');
+        }
+        return;
+      }
+
+      // Filter out any other escape sequences
+      const printable = cleanCh.replace(/\x1b\[[0-9;]*[a-zA-Z~]/g, '');
+      if (printable.length > 0) {
+        input += printable;
+        process.stdout.write('*'.repeat(printable.length));
+      }
+    }
+
+    process.stdin.on('data', handler);
   });
 }
 
@@ -85,24 +114,51 @@ function checkKiraService() {
 
 async function testApiKey(baseUrl, apiKey, model) {
   try {
-    const body = JSON.stringify({
-      model,
-      max_tokens: 10,
-      messages: [{ role: 'user', content: 'hi' }],
-    });
-    const result = spawnSync('curl', [
-      '-s', '-m', '15',
-      '-X', 'POST',
-      `${baseUrl}/chat/completions`,
-      '-H', 'Content-Type: application/json',
-      '-H', `Authorization: Bearer ${apiKey}`,
-      '-d', body,
-    ], { encoding: 'utf8', timeout: 16000 });
+    apiKey = (apiKey || '').trim();
+    baseUrl = (baseUrl || '').trim().replace(/\/+$/, '');
+    const isAnthropic = baseUrl.includes('anthropic.com');
+
+    let result;
+    if (isAnthropic) {
+      const body = JSON.stringify({
+        model: model || 'claude-sonnet-4-6',
+        max_tokens: 10,
+        messages: [{ role: 'user', content: 'hi' }],
+      });
+      result = spawnSync('curl', [
+        '-s', '-m', '15',
+        '-X', 'POST',
+        `${baseUrl}/messages`,
+        '-H', 'Content-Type: application/json',
+        '-H', `x-api-key: ${apiKey}`,
+        '-H', 'anthropic-version: 2023-06-01',
+        '-d', body,
+      ], { encoding: 'utf8', timeout: 16000 });
+    } else {
+      const body = JSON.stringify({
+        model,
+        max_tokens: 10,
+        messages: [{ role: 'user', content: 'hi' }],
+      });
+      result = spawnSync('curl', [
+        '-s', '-m', '15',
+        '-X', 'POST',
+        `${baseUrl}/chat/completions`,
+        '-H', 'Content-Type: application/json',
+        '-H', `Authorization: Bearer ${apiKey}`,
+        '-d', body,
+      ], { encoding: 'utf8', timeout: 16000 });
+    }
 
     if (result.error) return { ok: false, error: result.error.message };
-    const data = JSON.parse(result.stdout);
+    let data;
+    try {
+      data = JSON.parse(result.stdout);
+    } catch {
+      return { ok: false, error: (result.stdout || 'no response from API').slice(0, 150) };
+    }
     if (data.error) return { ok: false, error: data.error.message || JSON.stringify(data.error) };
-    if (data.choices?.[0]?.message?.content) return { ok: true };
+    if (data.choices?.[0]?.message?.content || data.content?.[0]?.text) return { ok: true };
     return { ok: false, error: 'unexpected response format' };
   } catch (e) { return { ok: false, error: e.message }; }
 }

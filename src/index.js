@@ -160,9 +160,10 @@ async function main() {
     }
 
     // Per-turn token state
-    let _tokenBuf   = '';
-    let _inToolTag  = false;
-    let _inThinkTag = false;
+    let _tokenBuf      = '';
+    let _inToolTag     = false;
+    let _inThinkTag    = false;
+    let _thinkCloseTag = null;
 
     tui.setThinking(true, 'thinking');
 
@@ -173,14 +174,16 @@ async function main() {
         // onThink
         () => { tui.setThinkingLabel('reasoning'); },
 
-        // onToken — filter <think> and <tool:…> tags, pipe clean text to TUI
+        // onToken — filter <think>/<thinking> and <tool:…> tags, pipe clean text to TUI
         (token) => {
           _tokenBuf += token;
 
-          // ── <think> blocks ──────────────────────────────────────────────────
-          if (!_inThinkTag && _tokenBuf.includes('<think>')) {
+          // ── <think> / <thinking> blocks ──────────────────────────────────────
+          const thinkMatch = _tokenBuf.match(/<(think|thinking)>/i);
+          if (!_inThinkTag && thinkMatch) {
             _inThinkTag    = true;
-            const tagStart = _tokenBuf.indexOf('<think>');
+            _thinkCloseTag = `</${thinkMatch[1]}>`.toLowerCase();
+            const tagStart = thinkMatch.index;
             const before   = _tokenBuf.slice(0, tagStart);
             _tokenBuf      = _tokenBuf.slice(tagStart);
             if (before.trim()) tui.appendToken(before);
@@ -188,10 +191,13 @@ async function main() {
           }
 
           if (_inThinkTag) {
-            if (_tokenBuf.includes('</think>')) {
-              const after = _tokenBuf.slice(_tokenBuf.indexOf('</think>') + 8);
+            const closeTag = _thinkCloseTag || '</think>';
+            const closeIdx = _tokenBuf.toLowerCase().indexOf(closeTag);
+            if (closeIdx !== -1) {
+              const after = _tokenBuf.slice(closeIdx + closeTag.length);
               _tokenBuf   = after;
               _inThinkTag = false;
+              _thinkCloseTag = null;
               if (after.trim()) { tui.appendToken(after); _tokenBuf = ''; }
             }
             return;
@@ -208,11 +214,23 @@ async function main() {
           }
 
           if (_inToolTag) {
-            if (_tokenBuf.includes('</tool>')) {
-              const after = _tokenBuf.slice(_tokenBuf.indexOf('</tool>') + 7);
+            const toolClose = _tokenBuf.match(/<\/tool(?::\w+)?>/i);
+            if (toolClose) {
+              const after = _tokenBuf.slice(toolClose.index + toolClose[0].length);
               _tokenBuf   = after;
               _inToolTag  = false;
               if (after.trim()) tui.appendToken(after);
+            }
+            return;
+          }
+
+          // If buffer ends with an incomplete tag opening, hold it for the next token
+          const openTagMatch = _tokenBuf.match(/<(?:t(?:h(?:i(?:n(?:k(?:i(?:n(?:g)?)?)?)?)?)?)?|t(?:o(?:o(?:l(?::\w*)?)?)?)?)$/i);
+          if (openTagMatch) {
+            const safeText = _tokenBuf.slice(0, openTagMatch.index);
+            if (safeText) {
+              tui.appendToken(safeText);
+              _tokenBuf = _tokenBuf.slice(openTagMatch.index);
             }
             return;
           }
@@ -233,9 +251,13 @@ async function main() {
 
         // onReply
         (reply, aborted) => {
-          _tokenBuf   = '';
-          _inToolTag  = false;
-          _inThinkTag = false;
+          if (!_inToolTag && !_inThinkTag && _tokenBuf.trim()) {
+            tui.appendToken(_tokenBuf);
+          }
+          _tokenBuf      = '';
+          _inToolTag     = false;
+          _inThinkTag    = false;
+          _thinkCloseTag = null;
           tui.finishStream();
         }
       );

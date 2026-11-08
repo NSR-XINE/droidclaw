@@ -227,27 +227,33 @@ Respond in JSON only:
 
 Be brutally honest. Vague self-criticism is useless.`);
 
-    const clean  = result.replace(/thinking[\s\S]*?<\/think>/gi, '').replace(/<\/?think>/gi, '').trim();
-    const match  = clean.match(/\{[\s\S]*\}/);
+    const clean = result
+      .replace(/<(?:think|thinking)>[\s\S]*?<\/(?:think|thinking)>/gi, '')
+      .replace(/<(?:think|thinking)>[\s\S]*$/gi, '')
+      .replace(/<\/?(?:think|thinking)>/gi, '')
+      .trim();
+    const match = clean.match(/\{[\s\S]*\}/);
     if (!match) return;
 
-    const parsed = JSON.parse(match[0]);
+    try {
+      const parsed = JSON.parse(match[0]);
 
-    parsed.new_failure_modes?.forEach(f => {
-      if (f && f.length > 10) {
-        model.failure_modes.push({ pattern: f, count: 1, lastSeen: Date.now(), context: 'deep_reflect' });
-      }
-    });
+      parsed.new_failure_modes?.forEach(f => {
+        if (f && f.length > 10) {
+          model.failure_modes.push({ pattern: f, count: 1, lastSeen: Date.now(), context: 'deep_reflect' });
+        }
+      });
 
-    parsed.new_blind_spots?.forEach(b => {
-      if (b && b.length > 10) recordBlindSpot(b);
-    });
+      parsed.new_blind_spots?.forEach(b => {
+        if (b && b.length > 10) recordBlindSpot(b);
+      });
 
-    parsed.changes?.forEach(c => {
-      if (c && c.length > 10) {
-        model.reasoning.push({ pattern: c, positive: true, count: 1 });
-      }
-    });
+      parsed.changes?.forEach(c => {
+        if (c && c.length > 10) {
+          model.reasoning.push({ pattern: c, positive: true, count: 1 });
+        }
+      });
+    } catch {}
 
     model.reasoning = model.reasoning.slice(-10);
     model.failure_modes = model.failure_modes.slice(-20);

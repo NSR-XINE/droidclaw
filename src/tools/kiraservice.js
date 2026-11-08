@@ -73,8 +73,64 @@ registry.register('press_home', () => {
   return fmt(r, 'home failed');
 }, 'press the home button');
 
-registry.register('open_app', ({ package: pkg }) => {
+const COMMON_APPS = {
+  'youtube': 'com.google.android.youtube',
+  'yt': 'com.google.android.youtube',
+  'whatsapp': 'com.whatsapp',
+  'wa': 'com.whatsapp',
+  'chrome': 'com.android.chrome',
+  'browser': 'com.android.chrome',
+  'telegram': 'org.telegram.messenger',
+  'tg': 'org.telegram.messenger',
+  'instagram': 'com.instagram.android',
+  'ig': 'com.instagram.android',
+  'insta': 'com.instagram.android',
+  'spotify': 'com.spotify.music',
+  'camera': 'com.android.camera',
+  'settings': 'com.android.settings',
+  'gallery': 'com.google.android.apps.photos',
+  'photos': 'com.google.android.apps.photos',
+  'maps': 'com.google.android.apps.maps',
+  'gmail': 'com.google.android.gm',
+  'play store': 'com.android.vending',
+  'playstore': 'com.android.vending',
+  'twitter': 'com.twitter.android',
+  'x': 'com.twitter.android',
+  'tiktok': 'com.zhiliaoapp.musically',
+  'discord': 'com.discord',
+};
+
+registry.register('open_app', (args) => {
+  let pkg = typeof args === 'string'
+    ? args
+    : (args?.package || args?.pkg || args?.app || args?.name || args?.raw || '');
+  pkg = String(pkg || '').trim().replace(/^['"]|['"]$/g, '');
+  if (!pkg) return 'error: app package name required';
+
+  const lower = pkg.toLowerCase();
+  if (COMMON_APPS[lower]) {
+    pkg = COMMON_APPS[lower];
+  }
+
+  // 1. Try KiraService if available
   const r = call('POST', '/open', { package: pkg });
+  if (r && !r.error) return `opened ${pkg}`;
+
+  // 2. Fallback to Termux am / termux-open-url
+  try {
+    const { execSync } = require('child_process');
+    execSync(`am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p "${pkg}" 2>/dev/null`, { timeout: 6000 });
+    return `opened ${pkg}`;
+  } catch {}
+
+  if (pkg.includes('youtube')) {
+    try {
+      const { execSync } = require('child_process');
+      execSync('termux-open-url "https://www.youtube.com"', { timeout: 4000 });
+      return 'opened youtube';
+    } catch {}
+  }
+
   return fmt(r, `could not open ${pkg}`);
 }, 'open any Android app by package name e.g. com.whatsapp com.instagram.android com.android.chrome');
 

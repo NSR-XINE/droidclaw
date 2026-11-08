@@ -51,7 +51,8 @@ ${context}
 ${tools}
 
 ## Tool syntax
-\`<tool:NAME>{"arg": "value"}</tool>\`
+<tool:NAME>{"arg": "value"}</tool>
+Always output valid JSON inside tool tags. Do not wrap tool tags in markdown code fences.
 
 ---
 

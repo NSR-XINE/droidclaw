@@ -88,7 +88,11 @@ class Telegram {
         () => {},              // onTool
         (r) => { reply = r; } // onReply
       );
-      const clean = (reply || '').replace(/thinking[\s\S]*?<\/think>/gi, '').replace(/<\/?think>/gi, '').trim();
+      const clean = (reply || '')
+        .replace(/<(?:think|thinking)>[\s\S]*?<\/(?:think|thinking)>/gi, '')
+        .replace(/<(?:think|thinking)>[\s\S]*$/gi, '')
+        .replace(/<\/?(?:think|thinking)>/gi, '')
+        .trim();
       await this._req('sendMessage', { chat_id: chatId, text: (clean || 'got nothing — try again?').slice(0, 4096) });
     } catch (e) {
       await this._req('sendMessage', { chat_id: chatId, text: 'error: ' + e.message });
