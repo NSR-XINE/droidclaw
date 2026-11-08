@@ -51,7 +51,7 @@ elif [ -d "$HOME/droidclaw/.git" ]; then
 else
   DROIDCLAW="$HOME/droidclaw"
   [ -d "$DROIDCLAW" ] && mv "$DROIDCLAW" "${DROIDCLAW}_backup_$(date +%s)"
-  git clone -q https://github.com/levilyf/droidclaw.git "$DROIDCLAW" || {
+  git clone -q https://github.com/NSR-XINE/droidclaw.git "$DROIDCLAW" || {
     echo -e "${RED}  ✕ Clone failed. Check your connection.${RST}"
     exit 1
   }
