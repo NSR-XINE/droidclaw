@@ -79,10 +79,26 @@ class Engine {
 
   async _streamOpenAI(system, messages, cfg, maxTokens, signal, onToken) {
     const msgs = system ? [{ role: 'system', content: system }, ...messages] : messages;
-    const res  = await fetch(`${cfg.baseUrl}/chat/completions`, {
+    const isAgentRouter = cfg.baseUrl && cfg.baseUrl.includes('agentrouter.org');
+    const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.apiKey}` };
+    if (isAgentRouter) {
+      headers['Originator'] = 'codex_cli_rs';
+      headers['User-Agent'] = 'codex_cli_rs/0.101.0 (Mac OS; arm64) Apple_Terminal/464';
+      headers['Version'] = '0.101.0';
+    }
+
+    const endpoint = isAgentRouter
+      ? `${cfg.baseUrl.replace(/\/+$/, '')}/v1/responses`
+      : `${cfg.baseUrl}/chat/completions`;
+
+    const body = isAgentRouter
+      ? { model: cfg.model, input: msgs, stream: true }
+      : { model: cfg.model, messages: msgs, max_tokens: maxTokens || 2048, stream: true };
+
+    const res  = await fetch(endpoint, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.apiKey}` },
-      body:    JSON.stringify({ model: cfg.model, messages: msgs, max_tokens: maxTokens || 2048, stream: true }),
+      headers,
+      body:    JSON.stringify(body),
       signal,
     });
 
@@ -106,7 +122,10 @@ class Engine {
           if (trimmed.startsWith('data: ') && trimmed !== 'data: [DONE]') {
             try {
               const json  = JSON.parse(trimmed.slice(6));
-              const token = json.choices?.[0]?.delta?.content || '';
+              let token = json.choices?.[0]?.delta?.content || '';
+              if (!token && json.type === 'response.output_text.delta' && json.delta) {
+                token = json.delta;
+              }
               if (token) { full += token; onToken && onToken(token); }
             } catch {}
           }
@@ -124,7 +143,10 @@ class Engine {
         if (!trimmed.startsWith('data: ')) continue;
         try {
           const json  = JSON.parse(trimmed.slice(6));
-          const token = json.choices?.[0]?.delta?.content || '';
+          let token = json.choices?.[0]?.delta?.content || '';
+          if (!token && json.type === 'response.output_text.delta' && json.delta) {
+            token = json.delta;
+          }
           if (token) { full += token; onToken && onToken(token); }
         } catch {}
       }
@@ -203,16 +225,36 @@ class Engine {
 
   async _openai(system, messages, cfg) {
     const msgs = system ? [{ role: 'system', content: system }, ...messages] : messages;
-    const res  = await fetch(`${cfg.baseUrl}/chat/completions`, {
+    const isAgentRouter = cfg.baseUrl && cfg.baseUrl.includes('agentrouter.org');
+    const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.apiKey}` };
+    if (isAgentRouter) {
+      headers['Originator'] = 'codex_cli_rs';
+      headers['User-Agent'] = 'codex_cli_rs/0.101.0 (Mac OS; arm64) Apple_Terminal/464';
+      headers['Version'] = '0.101.0';
+    }
+
+    const endpoint = isAgentRouter
+      ? `${cfg.baseUrl.replace(/\/+$/, '')}/v1/responses`
+      : `${cfg.baseUrl}/chat/completions`;
+
+    const body = isAgentRouter
+      ? { model: cfg.model, input: msgs }
+      : { model: cfg.model, messages: msgs, max_tokens: 2048 };
+
+    const res  = await fetch(endpoint, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.apiKey}` },
-      body:    JSON.stringify({ model: cfg.model, messages: msgs, max_tokens: 2048 }),
+      headers,
+      body:    JSON.stringify(body),
     });
     if (!res.ok) {
       const err = await res.text();
       throw new Error(`API ${res.status}: ${err.slice(0, 200)}`);
     }
     const data = await res.json();
+    if (isAgentRouter) {
+      const msgItem = data.output?.find(o => o.type === 'message');
+      return msgItem?.content?.find(c => c.type === 'output_text')?.text || msgItem?.content?.[0]?.text || '';
+    }
     return data.choices?.[0]?.message?.content || '';
   }
 
